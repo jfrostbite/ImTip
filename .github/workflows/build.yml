@@ -18,15 +18,15 @@ jobs:
       uses: swift-actions/setup-swift@v1
       
     - name: Build
-      run: swift build
+      run: swift build -c release
       
     - name: Create App Bundle
       run: |
-        mkdir -p IMStatus.app/Contents/MacOS
-        mkdir -p IMStatus.app/Contents/Resources
+        mkdir -p IMStatus.app/Contents/{MacOS,Resources}
         
         # Copy executable
-        cp .build/debug/IMStatus IMStatus.app/Contents/MacOS/
+        cp .build/release/IMStatus IMStatus.app/Contents/MacOS/
+        chmod +x IMStatus.app/Contents/MacOS/IMStatus
         
         # Create Info.plist
         cat > IMStatus.app/Contents/Info.plist << EOF
@@ -48,16 +48,20 @@ jobs:
             <string>12.0</string>
             <key>LSUIElement</key>
             <true/>
+            <key>NSHighResolutionCapable</key>
+            <true/>
         </dict>
         </plist>
         EOF
         
         # Create DMG
+        hdiutil create -volname "IMStatus" -srcfolder IMStatus.app -ov -format UDZO IMStatus.dmg
+        
         mkdir -p artifacts
-        cp -r IMStatus.app artifacts/
+        mv IMStatus.dmg artifacts/
         
     - name: Upload Artifact
       uses: actions/upload-artifact@v3
       with:
         name: IMStatus
-        path: artifacts/IMStatus.app 
+        path: artifacts/IMStatus.dmg 
