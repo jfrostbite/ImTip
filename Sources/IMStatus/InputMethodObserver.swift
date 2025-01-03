@@ -50,40 +50,41 @@ class InputMethodObserver: NSObject {
         guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return }
         let name = getInputSourceName(source)
         
-        // 获取当前光标位置
         if let position = getCurrentCaretPosition() {
             showFloatingStatus(name, at: position)
         }
     }
     
     private func getCurrentCaretPosition() -> NSPoint? {
-        if let app = NSWorkspace.shared.frontmostApplication {
-            let pid = app.processIdentifier
-            
-            let axApp = AXUIElementCreateApplication(pid)
-            var focusedElement: AXUIElement?
-            var position = NSPoint.zero
-            var size = NSSize.zero
-            
-            AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &focusedElement as UnsafeMutablePointer<CFTypeRef?>)
-            
-            if let element = focusedElement {
-                var value: AnyObject?
-                AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &value)
-                if let positionValue = value as? AXValue {
-                    AXValueGetValue(positionValue, .cgPoint, &position)
-                }
-                
-                AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &value)
-                if let sizeValue = value as? AXValue {
-                    AXValueGetValue(sizeValue, .cgSize, &size)
-                }
-                
-                // 返回输入框上方的位置
-                return NSPoint(x: position.x, y: position.y + size.height)
-            }
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        let pid = app.processIdentifier
+        
+        let axApp = AXUIElementCreateApplication(pid)
+        var element: AnyObject?
+        
+        // 获取焦点元素
+        let result = AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &element)
+        guard result == .success, let focusedElement = element else { return nil }
+        
+        var position = NSPoint.zero
+        var size = NSSize.zero
+        
+        // 获取位置
+        var posValue: AnyObject?
+        AXUIElementCopyAttributeValue(focusedElement as! AXUIElement, kAXPositionAttribute as CFString, &posValue)
+        if let positionValue = posValue {
+            AXValueGetValue(positionValue as! AXValue, .cgPoint, &position)
         }
-        return nil
+        
+        // 获取大小
+        var sizeValue: AnyObject?
+        AXUIElementCopyAttributeValue(focusedElement as! AXUIElement, kAXSizeAttribute as CFString, &sizeValue)
+        if let sizeVal = sizeValue {
+            AXValueGetValue(sizeVal as! AXValue, .cgSize, &size)
+        }
+        
+        // 返回输入框上方的位置
+        return NSPoint(x: position.x, y: position.y + size.height)
     }
     
     @objc private func inputSourceChanged() {
