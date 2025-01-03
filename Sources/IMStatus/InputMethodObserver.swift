@@ -92,7 +92,12 @@ class InputMethodObserver: NSObject {
               let focusedElement = getFocusedElement(for: app) else { return }
         
         // 检查是否是新的焦点元素
-        let isSameElement = lastFocusedElement.map { AXUIElementIsEqual($0, focusedElement) } ?? false
+        let isSameElement = lastFocusedElement.map { element -> Bool in
+            var isEqual: DarwinBoolean = false
+            AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isEqual)
+            return CFEqual(element, focusedElement)
+        } ?? false
+        
         lastFocusedElement = focusedElement
         
         // 检查是否是文本输入区域
