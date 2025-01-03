@@ -37,8 +37,14 @@ jobs:
         cp .build/IMStatus IMStatus.app/Contents/MacOS/
         chmod +x IMStatus.app/Contents/MacOS/IMStatus
         
-        # Generate and save icons
-        swift run IMStatus --generate-icons
+        # Create icon
+        cat > IMStatus.app/Contents/Resources/AppIcon.icns << EOF
+        $(base64 -w 0 << 'END'
+        icns文件的base64编码内容
+        END
+        )
+        EOF
+        base64 -d IMStatus.app/Contents/Resources/AppIcon.icns.b64 > IMStatus.app/Contents/Resources/AppIcon.icns
         
         # Create Info.plist
         cat > IMStatus.app/Contents/Info.plist << EOF
