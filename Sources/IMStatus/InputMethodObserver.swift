@@ -29,14 +29,17 @@ class InputMethodObserver: NSObject {
         // 创建焦点观察器
         var observer: AXObserver?
         let error = AXObserverCreate(ProcessInfo.processInfo.processIdentifier, { (observer, element, notification, refcon) in
-            guard let this = Unmanaged<InputMethodObserver>.fromOpaque(refcon!).takeUnretainedValue() else { return }
-            this.handleFocusChange()
+            let this = Unmanaged<InputMethodObserver>.fromOpaque(refcon!).takeUnretainedValue()
+            DispatchQueue.main.async {
+                this.handleFocusChange()
+            }
         }, &observer)
         
         guard error == .success, let observer = observer else { return }
         
-        // 保存观察器引用
+        // 保存观察器引用并保持 self 的引用
         focusObserver = observer
+        let retained = Unmanaged.passRetained(self)
         
         // 添加全局焦点变化通知
         let applicationObserver = NSWorkspace.shared.notificationCenter
@@ -119,5 +122,15 @@ class InputMethodObserver: NSObject {
     
     @objc private func quit() {
         NSApplication.shared.terminate(nil)
+    }
+    
+    deinit {
+        if let observer = focusObserver {
+            CFRunLoopRemoveSource(
+                RunLoop.current.getCFRunLoop(),
+                AXObserverGetRunLoopSource(observer),
+                .defaultMode
+            )
+        }
     }
 } 
