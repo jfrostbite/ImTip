@@ -59,6 +59,16 @@ jobs:
             <true/>
             <key>NSHighResolutionCapable</key>
             <true/>
+            <key>NSAppleEventsUsageDescription</key>
+            <string>需要此权限来检测输入法状态</string>
+            <key>NSAccessibilityUsageDescription</key>
+            <string>需要此权限来获取光标位置</string>
+            <key>NSPrincipalClass</key>
+            <string>NSApplication</string>
+            <key>NSSupportsAutomaticTermination</key>
+            <true/>
+            <key>NSSupportsSuddenTermination</key>
+            <true/>
         </dict>
         </plist>
         EOF
