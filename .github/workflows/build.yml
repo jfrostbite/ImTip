@@ -1,0 +1,32 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Swift
+      uses: swift-actions/setup-swift@v1
+      
+    - name: Build
+      run: swift build
+      
+    - name: Create DMG
+      run: |
+        mkdir -p artifacts
+        cp -r .build/debug/IMStatus artifacts/
+        
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: IMStatus
+        path: artifacts/IMStatus 
