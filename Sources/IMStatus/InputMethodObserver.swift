@@ -12,6 +12,9 @@ class InputMethodObserver: NSObject {
     private var isTyping: Bool = false
     private var typingTimer: Timer?
     private var hasFocus: Bool = false
+    private var lastFocusTime: Date = .distantPast
+    private var minimumFocusInterval: TimeInterval = 0.5  // 最小焦点间隔
+    private var minimumShowInterval: TimeInterval = 3.0   // 最小显示间隔
     
     init(statusWindow: StatusWindow) {
         self.statusWindow = statusWindow
@@ -104,6 +107,14 @@ class InputMethodObserver: NSObject {
     }
     
     private func handleFocusChange() {
+        // 检查焦点变化的时间间隔
+        let now = Date()
+        let timeSinceFocus = now.timeIntervalSince(lastFocusTime)
+        if timeSinceFocus < minimumFocusInterval {
+            return  // 忽略过于频繁的焦点变化
+        }
+        lastFocusTime = now
+        
         guard hasFocus,
               let app = NSWorkspace.shared.frontmostApplication,
               let focusedElement = getFocusedElement(for: app) else {
@@ -111,15 +122,6 @@ class InputMethodObserver: NSObject {
             lastFocusedElement = nil
             return
         }
-        
-        // 检查是否是新的焦点元素
-        let isSameElement = lastFocusedElement.map { element -> Bool in
-            var isEqual: DarwinBoolean = false
-            AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isEqual)
-            return CFEqual(element, focusedElement)
-        } ?? false
-        
-        lastFocusedElement = focusedElement
         
         // 检查是否是文本输入区域
         var isTextInput: DarwinBoolean = false
@@ -132,16 +134,26 @@ class InputMethodObserver: NSObject {
         let textRoles = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"]
         let isTextArea = isTextInput.boolValue || (roleStr != nil && textRoles.contains(roleStr!))
         
-        hasFocus = isTextArea
+        if !isTextArea {
+            hasFocus = false
+            lastFocusedElement = nil
+            return
+        }
+        
+        // 检查是否是新的焦点元素
+        let isSameElement = lastFocusedElement.map { element -> Bool in
+            return CFEqual(element, focusedElement)
+        } ?? false
+        
+        lastFocusedElement = focusedElement
+        hasFocus = true
         
         // 决定是否显示提示
-        let now = Date()
         let timeSinceLastShow = now.timeIntervalSince(lastShowTime)
         
-        let shouldShow = isTextArea && hasFocus && (
+        let shouldShow = (
             !isSameElement || // 新的输入框
-            (timeSinceLastShow > 2.0 && !isTyping) || // 同一输入框但停顿超过2秒
-            (timeSinceLastShow > 10.0) // 无论如何，每10秒至少提示一次
+            (timeSinceLastShow > minimumShowInterval && !isTyping) // 同一输入框但间隔足够长
         )
         
         if shouldShow {
