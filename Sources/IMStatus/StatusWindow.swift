@@ -43,7 +43,6 @@ class StatusWindow: NSWindow {
         setFrameOrigin(point)
         orderFront(nil)
         
-        // 2秒后自动隐藏
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.orderOut(nil)
         }

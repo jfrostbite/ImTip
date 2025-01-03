@@ -48,10 +48,9 @@ class InputMethodObserver: NSObject {
     }
     
     private func showFloatingStatus(_ text: String) {
-        if let mouseLocation = NSEvent.mouseLocation {
-            let screenPoint = NSPoint(x: mouseLocation.x, y: mouseLocation.y - 50)
-            statusWindow?.show(text: text, at: screenPoint)
-        }
+        let mouseLocation = NSEvent.mouseLocation
+        let screenPoint = NSPoint(x: mouseLocation.x, y: mouseLocation.y - 50)
+        statusWindow?.show(text: text, at: screenPoint)
     }
     
     @objc private func quit() {
