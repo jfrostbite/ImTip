@@ -17,15 +17,24 @@ jobs:
     - name: Setup Swift
       uses: swift-actions/setup-swift@v1
       
-    - name: Build
-      run: swift build -c release --arch arm64 --arch x86_64
+    - name: Build Universal Binary
+      run: |
+        # Build for Intel
+        swift build -c release --arch x86_64
+        # Build for Apple Silicon
+        swift build -c release --arch arm64
+        # Create universal binary
+        lipo -create \
+          .build/x86_64-apple-macosx/release/IMStatus \
+          .build/arm64-apple-macosx/release/IMStatus \
+          -output .build/IMStatus
       
     - name: Create App Bundle
       run: |
         mkdir -p IMStatus.app/Contents/{MacOS,Resources}
         
         # Copy executable
-        cp .build/apple/Products/Release/IMStatus IMStatus.app/Contents/MacOS/
+        cp .build/IMStatus IMStatus.app/Contents/MacOS/
         chmod +x IMStatus.app/Contents/MacOS/IMStatus
         
         # Create Info.plist
