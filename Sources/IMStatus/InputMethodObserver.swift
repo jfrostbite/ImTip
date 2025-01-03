@@ -37,20 +37,27 @@ class InputMethodObserver: NSObject {
         
         guard error == .success, let observer = observer else { return }
         
-        // 保存观察器引用并保持 self 的引用
         focusObserver = observer
         let retained = Unmanaged.passRetained(self)
         
-        // 添加全局焦点变化通知
-        let applicationObserver = NSWorkspace.shared.notificationCenter
-        applicationObserver.addObserver(
+        // 监听更多的焦点相关事件
+        NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(applicationActivated(_:)),
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
         
-        // 启动观察器
+        // 监听文本输入变化
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleFocusChange()
+            return event
+        }
+        
+        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            self?.handleFocusChange()
+        }
+        
         CFRunLoopAddSource(
             RunLoop.current.getCFRunLoop(),
             AXObserverGetRunLoopSource(observer),
@@ -63,16 +70,20 @@ class InputMethodObserver: NSObject {
     }
     
     private func handleFocusChange() {
-        // 获取当前焦点元素
         guard let app = NSWorkspace.shared.frontmostApplication,
               let focusedElement = getFocusedElement(for: app) else { return }
         
-        // 检查元素是否可以接受文本输入
+        // 检查更多的文本输入相关属性
         var isTextInput: DarwinBoolean = false
         AXUIElementIsAttributeSettable(focusedElement, kAXValueAttribute as CFString, &isTextInput)
         
-        if isTextInput.boolValue {
-            // 显示当前输入法状态
+        var role: CFTypeRef?
+        AXUIElementCopyAttributeValue(focusedElement, kAXRoleAttribute as CFString, &role)
+        let roleStr = role as? String
+        
+        let textRoles = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"]
+        
+        if isTextInput.boolValue || (roleStr != nil && textRoles.contains(roleStr!)) {
             if let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
                 let name = getInputSourceName(source)
                 showFloatingStatus(name)
@@ -115,8 +126,27 @@ class InputMethodObserver: NSObject {
     }
     
     private func showFloatingStatus(_ text: String) {
+        // 尝试获取插入点位置
+        if let app = NSWorkspace.shared.frontmostApplication,
+           let focusedElement = getFocusedElement(for: app) {
+            var position: CFTypeRef?
+            let error = AXUIElementCopyAttributeValue(focusedElement, kAXSelectedTextRangeAttribute as CFString, &position)
+            
+            if error == .success, let position = position {
+                var point: CGPoint = .zero
+                var size: CGSize = .zero
+                AXValueGetValue(position as! AXValue, .cgPoint, &point)
+                
+                // 在插入点上方显示
+                let screenPoint = NSPoint(x: point.x, y: point.y + 20)
+                statusWindow?.show(text: text, at: screenPoint)
+                return
+            }
+        }
+        
+        // 如果无法获取插入点位置，则使用鼠标位置
         let mouseLocation = NSEvent.mouseLocation
-        let screenPoint = NSPoint(x: mouseLocation.x, y: mouseLocation.y - 50)
+        let screenPoint = NSPoint(x: mouseLocation.x, y: mouseLocation.y + 20)
         statusWindow?.show(text: text, at: screenPoint)
     }
     
