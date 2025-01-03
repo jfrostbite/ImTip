@@ -15,6 +15,7 @@ class InputMethodObserver: NSObject {
     private var lastFocusTime: Date = .distantPast
     private var minimumFocusInterval: TimeInterval = 0.5  // 最小焦点间隔
     private var minimumShowInterval: TimeInterval = 3.0   // 最小显示间隔
+    private var isInputting: Bool = false
     
     init(statusWindow: StatusWindow) {
         self.statusWindow = statusWindow
@@ -23,9 +24,15 @@ class InputMethodObserver: NSObject {
         setupFocusObserver()
         startObservingInputMethod()
         
-        // 监听键盘事件来检测输入间隔
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyDown()
+        // 只监听键盘输入事件
+        NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
+            if event.type == .keyDown {
+                // 只有在真正输入字符时才标记为输入状态
+                if !event.charactersIgnoringModifiers.isNilOrEmpty {
+                    self?.isInputting = true
+                    self?.handleInputStart()
+                }
+            }
             return event
         }
     }
@@ -89,13 +96,11 @@ class InputMethodObserver: NSObject {
     }
     
     @objc private func applicationActivated(_ notification: Notification) {
-        hasFocus = true
-        handleFocusChange()
+        // 不再在应用程序激活时显示提示
     }
     
     @objc private func applicationDeactivated(_ notification: Notification) {
-        hasFocus = false
-        lastFocusedElement = nil
+        isInputting = false
     }
     
     private func handleKeyDown() {
@@ -107,62 +112,7 @@ class InputMethodObserver: NSObject {
     }
     
     private func handleFocusChange() {
-        // 检查焦点变化的时间间隔
-        let now = Date()
-        let timeSinceFocus = now.timeIntervalSince(lastFocusTime)
-        if timeSinceFocus < minimumFocusInterval {
-            return  // 忽略过于频繁的焦点变化
-        }
-        lastFocusTime = now
-        
-        guard hasFocus,
-              let app = NSWorkspace.shared.frontmostApplication,
-              let focusedElement = getFocusedElement(for: app) else {
-            hasFocus = false
-            lastFocusedElement = nil
-            return
-        }
-        
-        // 检查是否是文本输入区域
-        var isTextInput: DarwinBoolean = false
-        AXUIElementIsAttributeSettable(focusedElement, kAXValueAttribute as CFString, &isTextInput)
-        
-        var role: CFTypeRef?
-        AXUIElementCopyAttributeValue(focusedElement, kAXRoleAttribute as CFString, &role)
-        let roleStr = role as? String
-        
-        let textRoles = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"]
-        let isTextArea = isTextInput.boolValue || (roleStr != nil && textRoles.contains(roleStr!))
-        
-        if !isTextArea {
-            hasFocus = false
-            lastFocusedElement = nil
-            return
-        }
-        
-        // 检查是否是新的焦点元素
-        let isSameElement = lastFocusedElement.map { element -> Bool in
-            return CFEqual(element, focusedElement)
-        } ?? false
-        
-        lastFocusedElement = focusedElement
-        hasFocus = true
-        
-        // 决定是否显示提示
-        let timeSinceLastShow = now.timeIntervalSince(lastShowTime)
-        
-        let shouldShow = (
-            !isSameElement || // 新的输入框
-            (timeSinceLastShow > minimumShowInterval && !isTyping) // 同一输入框但间隔足够长
-        )
-        
-        if shouldShow {
-            if let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
-                let name = getInputSourceName(source)
-                showFloatingStatus(name)
-                lastShowTime = now
-            }
-        }
+        // 不再在焦点变化时显示提示
     }
     
     private func getFocusedElement(for app: NSRunningApplication) -> AXUIElement? {
@@ -277,5 +227,11 @@ class InputMethodObserver: NSObject {
                 .defaultMode
             )
         }
+    }
+}
+
+extension String {
+    var isNilOrEmpty: Bool {
+        return self.isEmpty
     }
 } 
