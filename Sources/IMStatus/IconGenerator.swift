@@ -71,7 +71,6 @@ class IconGenerator {
         
         // 保存不同尺寸的图标
         let sizes = [16, 32, 64, 128, 256, 512, 1024]
-        let icnsData = NSMutableData()
         
         for size in sizes {
             let sizedImage = NSImage(size: NSSize(width: size, height: size))
@@ -82,7 +81,7 @@ class IconGenerator {
             if let tiffData = sizedImage.tiffRepresentation,
                let bitmap = NSBitmapImageRep(data: tiffData),
                let pngData = bitmap.representation(using: .png, properties: [:]) {
-                pngData.write(to: URL(fileURLWithPath: "icon_\(size).png"), atomically: true)
+                try? pngData.write(to: URL(fileURLWithPath: "icon_\(size).png"))
             }
         }
     }
