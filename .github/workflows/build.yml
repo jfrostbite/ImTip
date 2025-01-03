@@ -18,14 +18,14 @@ jobs:
       uses: swift-actions/setup-swift@v1
       
     - name: Build
-      run: swift build -c release
+      run: swift build -c release --arch arm64 --arch x86_64
       
     - name: Create App Bundle
       run: |
         mkdir -p IMStatus.app/Contents/{MacOS,Resources}
         
         # Copy executable
-        cp .build/release/IMStatus IMStatus.app/Contents/MacOS/
+        cp .build/apple/Products/Release/IMStatus IMStatus.app/Contents/MacOS/
         chmod +x IMStatus.app/Contents/MacOS/IMStatus
         
         # Create Info.plist
@@ -45,11 +45,16 @@ jobs:
             <key>CFBundleShortVersionString</key>
             <string>1.0</string>
             <key>LSMinimumSystemVersion</key>
-            <string>12.0</string>
+            <string>11.0</string>
             <key>LSUIElement</key>
             <true/>
             <key>NSHighResolutionCapable</key>
             <true/>
+            <key>LSArchitecturePriority</key>
+            <array>
+                <string>arm64</string>
+                <string>x86_64</string>
+            </array>
         </dict>
         </plist>
         EOF
