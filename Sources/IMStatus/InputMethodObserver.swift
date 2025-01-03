@@ -7,6 +7,10 @@ class InputMethodObserver: NSObject {
     private var lastInputSource: TISInputSource?
     private weak var statusWindow: StatusWindow?
     private var focusObserver: AXObserver?
+    private var lastFocusedElement: AXUIElement?
+    private var lastShowTime: Date = .distantPast
+    private var isTyping: Bool = false
+    private var typingTimer: Timer?
     
     init(statusWindow: StatusWindow) {
         self.statusWindow = statusWindow
@@ -14,6 +18,12 @@ class InputMethodObserver: NSObject {
         setupMenuBar()
         setupFocusObserver()
         startObservingInputMethod()
+        
+        // 监听键盘事件来检测输入间隔
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleKeyDown()
+            return event
+        }
     }
     
     private func setupMenuBar() {
@@ -69,11 +79,23 @@ class InputMethodObserver: NSObject {
         handleFocusChange()
     }
     
+    private func handleKeyDown() {
+        isTyping = true
+        typingTimer?.invalidate()
+        typingTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+            self?.isTyping = false
+        }
+    }
+    
     private func handleFocusChange() {
         guard let app = NSWorkspace.shared.frontmostApplication,
               let focusedElement = getFocusedElement(for: app) else { return }
         
-        // 检查更多的文本输入相关属性
+        // 检查是否是新的焦点元素
+        let isSameElement = lastFocusedElement.map { AXUIElementIsEqual($0, focusedElement) } ?? false
+        lastFocusedElement = focusedElement
+        
+        // 检查是否是文本输入区域
         var isTextInput: DarwinBoolean = false
         AXUIElementIsAttributeSettable(focusedElement, kAXValueAttribute as CFString, &isTextInput)
         
@@ -82,11 +104,23 @@ class InputMethodObserver: NSObject {
         let roleStr = role as? String
         
         let textRoles = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"]
+        let isTextArea = isTextInput.boolValue || (roleStr != nil && textRoles.contains(roleStr!))
         
-        if isTextInput.boolValue || (roleStr != nil && textRoles.contains(roleStr!)) {
+        // 决定是否显示提示
+        let now = Date()
+        let timeSinceLastShow = now.timeIntervalSince(lastShowTime)
+        
+        let shouldShow = isTextArea && (
+            !isSameElement || // 新的输入框
+            (timeSinceLastShow > 2.0 && !isTyping) || // 同一输入框但停顿超过2秒
+            (timeSinceLastShow > 10.0) // 无论如何，每10秒至少提示一次
+        )
+        
+        if shouldShow {
             if let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
                 let name = getInputSourceName(source)
                 showFloatingStatus(name)
+                lastShowTime = now
             }
         }
     }
