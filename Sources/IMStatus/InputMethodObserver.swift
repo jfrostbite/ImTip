@@ -5,12 +5,12 @@ import Carbon
 class InputMethodObserver: NSObject {
     private var statusItem: NSStatusItem?
     private var lastInputSource: TISInputSource?
-    private var statusWindow: StatusWindow?
+    private weak var statusWindow: StatusWindow?
     private var focusObserver: AXObserver?
     
-    override init() {
+    init(statusWindow: StatusWindow) {
+        self.statusWindow = statusWindow
         super.init()
-        statusWindow = StatusWindow()
         setupMenuBar()
         setupFocusObserver()
         startObservingInputMethod()
@@ -21,7 +21,7 @@ class InputMethodObserver: NSObject {
         statusItem?.button?.title = "⌨️"
         
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "退出", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(withTitle: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem?.menu = menu
     }
     

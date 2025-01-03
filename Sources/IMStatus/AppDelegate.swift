@@ -5,8 +5,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusWindow: StatusWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        observer = InputMethodObserver()
         statusWindow = StatusWindow()
+        observer = InputMethodObserver(statusWindow: statusWindow!)
         
         requestAccessibilityPermission()
     }
