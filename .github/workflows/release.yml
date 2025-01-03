@@ -1,0 +1,108 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Swift
+      uses: swift-actions/setup-swift@v1
+      
+    - name: Build Universal Binary
+      run: |
+        # Build for Intel
+        swift build -c release --arch x86_64
+        # Build for Apple Silicon
+        swift build -c release --arch arm64
+        # Create universal binary
+        lipo -create \
+          .build/x86_64-apple-macosx/release/IMStatus \
+          .build/arm64-apple-macosx/release/IMStatus \
+          -output .build/IMStatus
+      
+    - name: Create App Bundle
+      run: |
+        mkdir -p IMStatus.app/Contents/{MacOS,Resources}
+        
+        # Copy executable
+        cp .build/IMStatus IMStatus.app/Contents/MacOS/
+        chmod +x IMStatus.app/Contents/MacOS/IMStatus
+        
+        # Generate icon
+        swift run IMStatus --generate-icon
+        
+        # Create icns file
+        mkdir icon.iconset
+        mv icon_16.png icon.iconset/icon_16x16.png
+        mv icon_32.png icon.iconset/icon_32x32.png
+        mv icon_64.png icon.iconset/icon_32x32@2x.png
+        mv icon_128.png icon.iconset/icon_128x128.png
+        mv icon_256.png icon.iconset/icon_256x256.png
+        mv icon_512.png icon.iconset/icon_512x512.png
+        mv icon_1024.png icon.iconset/icon_512x512@2x.png
+        iconutil -c icns icon.iconset
+        mv icon.icns IMStatus.app/Contents/Resources/AppIcon.icns
+        
+        # Create Info.plist
+        cat > IMStatus.app/Contents/Info.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>IMStatus</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.github.imstatus</string>
+            <key>CFBundleName</key>
+            <string>IMStatus</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${GITHUB_REF#refs/tags/v}</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>11.0</string>
+            <key>LSUIElement</key>
+            <true/>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+            <key>CFBundleIconFile</key>
+            <string>AppIcon</string>
+            <key>LSArchitecturePriority</key>
+            <array>
+                <string>arm64</string>
+                <string>x86_64</string>
+            </array>
+        </dict>
+        </plist>
+        EOF
+        
+        # Create DMG
+        hdiutil create -volname "IMStatus" -srcfolder IMStatus.app -ov -format UDZO IMStatus.dmg
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+        
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./IMStatus.dmg
+        asset_name: IMStatus.dmg
+        asset_content_type: application/x-apple-diskimage 
