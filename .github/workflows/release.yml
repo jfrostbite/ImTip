@@ -82,6 +82,12 @@ jobs:
                 <string>arm64</string>
                 <string>x86_64</string>
             </array>
+            <key>NSAppleEventsUsageDescription</key>
+            <string>需要辅助功能权限来检测输入区域和显示输入法状态</string>
+            <key>NSAccessibilityUsageDescription</key>
+            <string>需要辅助功能权限来检测输入区域和显示输入法状态</string>
+            <key>Privacy - Accessibility Usage Description</key>
+            <string>需要辅助功能权限来检测输入区域和显示输入法状态</string>
         </dict>
         </plist>
         EOF
