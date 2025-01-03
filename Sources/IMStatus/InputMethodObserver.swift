@@ -11,14 +11,17 @@ class InputMethodObserver: NSObject {
         statusWindow = StatusWindow()
         setupMenuBar()
         startObservingInputMethod()
+        startObservingTextInput()
     }
     
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem?.button?.title = "⌨️"
+        if let button = statusItem?.button {
+            button.image = NSImage(named: "MenuBarIcon")
+        }
         
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "退出", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(withTitle: "退出", action: #selector(quit), keyEquivalent: "q")
         statusItem?.menu = menu
     }
     
@@ -31,15 +34,60 @@ class InputMethodObserver: NSObject {
         )
     }
     
-    @objc private func inputSourceChanged() {
-        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return }
-        updateStatusDisplay(source)
-        lastInputSource = source
+    private func startObservingTextInput() {
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] _ in
+            self?.checkInputMethod()
+        }
+        
+        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            if let window = self?.statusWindow, window.isVisible {
+                window.orderOut(nil)
+            }
+        }
     }
     
-    private func updateStatusDisplay(_ source: TISInputSource) {
+    private func checkInputMethod() {
+        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else { return }
         let name = getInputSourceName(source)
-        showFloatingStatus(name)
+        
+        // 获取当前光标位置
+        if let position = getCurrentCaretPosition() {
+            showFloatingStatus(name, at: position)
+        }
+    }
+    
+    private func getCurrentCaretPosition() -> NSPoint? {
+        if let app = NSWorkspace.shared.frontmostApplication {
+            let pid = app.processIdentifier
+            
+            let axApp = AXUIElementCreateApplication(pid)
+            var focusedElement: AXUIElement?
+            var position = NSPoint.zero
+            var size = NSSize.zero
+            
+            AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &focusedElement as UnsafeMutablePointer<CFTypeRef?>)
+            
+            if let element = focusedElement {
+                var value: AnyObject?
+                AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &value)
+                if let positionValue = value as? AXValue {
+                    AXValueGetValue(positionValue, .cgPoint, &position)
+                }
+                
+                AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &value)
+                if let sizeValue = value as? AXValue {
+                    AXValueGetValue(sizeValue, .cgSize, &size)
+                }
+                
+                // 返回输入框上方的位置
+                return NSPoint(x: position.x, y: position.y + size.height)
+            }
+        }
+        return nil
+    }
+    
+    @objc private func inputSourceChanged() {
+        checkInputMethod()
     }
     
     private func getInputSourceName(_ source: TISInputSource) -> String {
@@ -47,10 +95,8 @@ class InputMethodObserver: NSObject {
         return (Unmanaged<CFString>.fromOpaque(cfName!).takeUnretainedValue() as String)
     }
     
-    private func showFloatingStatus(_ text: String) {
-        let mouseLocation = NSEvent.mouseLocation
-        let screenPoint = NSPoint(x: mouseLocation.x, y: mouseLocation.y - 50)
-        statusWindow?.show(text: text, at: screenPoint)
+    private func showFloatingStatus(_ text: String, at point: NSPoint) {
+        statusWindow?.show(text: text, at: point)
     }
     
     @objc private func quit() {
