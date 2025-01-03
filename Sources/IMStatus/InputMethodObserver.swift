@@ -129,24 +129,38 @@ class InputMethodObserver: NSObject {
         // 尝试获取插入点位置
         if let app = NSWorkspace.shared.frontmostApplication,
            let focusedElement = getFocusedElement(for: app) {
-            var position: CFTypeRef?
-            let error = AXUIElementCopyAttributeValue(focusedElement, kAXSelectedTextRangeAttribute as CFString, &position)
             
-            if error == .success, let position = position {
-                var point: CGPoint = .zero
-                var size: CGSize = .zero
-                AXValueGetValue(position as! AXValue, .cgPoint, &point)
-                
-                // 在插入点上方显示
-                let screenPoint = NSPoint(x: point.x, y: point.y + 20)
-                statusWindow?.show(text: text, at: screenPoint)
-                return
+            // 先尝试获取插入点位置
+            var caretPosition: CFTypeRef?
+            if AXUIElementCopyAttributeValue(focusedElement, kAXInsertionPointLineNumberAttribute as CFString, &caretPosition) == .success {
+                var bounds: CFTypeRef?
+                if AXUIElementCopyAttributeValue(focusedElement, kAXBoundsAttribute as CFString, &bounds) == .success {
+                    var rect = CGRect.zero
+                    AXValueGetValue(bounds as! AXValue, .cgRect, &rect)
+                    
+                    // 获取窗口位置
+                    var windowElement: AXUIElement?
+                    var position = CGPoint.zero
+                    if AXUIElementCopyAttributeValue(focusedElement, kAXWindowAttribute as CFString, &windowElement) == .success,
+                       let window = windowElement,
+                       AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &bounds) == .success {
+                        AXValueGetValue(bounds as! AXValue, .cgPoint, &position)
+                        
+                        // 计算屏幕坐标
+                        let screenPoint = NSPoint(
+                            x: position.x + rect.origin.x,
+                            y: position.y + rect.origin.y + rect.height + 5
+                        )
+                        statusWindow?.show(text: text, at: screenPoint)
+                        return
+                    }
+                }
             }
         }
         
-        // 如果无法获取插入点位置，则使用鼠标位置
+        // 如果无法获取插入点位置，则使用鼠标位置但稍微调整
         let mouseLocation = NSEvent.mouseLocation
-        let screenPoint = NSPoint(x: mouseLocation.x, y: mouseLocation.y + 20)
+        let screenPoint = NSPoint(x: mouseLocation.x, y: mouseLocation.y + 25)
         statusWindow?.show(text: text, at: screenPoint)
     }
     
