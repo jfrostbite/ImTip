@@ -11,6 +11,7 @@ class InputMethodObserver: NSObject {
     private var lastShowTime: Date = .distantPast
     private var isTyping: Bool = false
     private var typingTimer: Timer?
+    private var hasFocus: Bool = false
     
     init(statusWindow: StatusWindow) {
         self.statusWindow = statusWindow
@@ -50,7 +51,7 @@ class InputMethodObserver: NSObject {
         focusObserver = observer
         _ = Unmanaged.passRetained(self)
         
-        // 监听更多的焦点相关事件
+        // 监听焦点变化和窗口激活
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(applicationActivated(_:)),
@@ -58,9 +59,18 @@ class InputMethodObserver: NSObject {
             object: nil
         )
         
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(applicationDeactivated(_:)),
+            name: NSWorkspace.didDeactivateApplicationNotification,
+            object: nil
+        )
+        
         // 监听文本输入变化
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleFocusChange()
+            if self?.hasFocus == true {
+                self?.handleKeyDown()
+            }
             return event
         }
         
@@ -76,7 +86,13 @@ class InputMethodObserver: NSObject {
     }
     
     @objc private func applicationActivated(_ notification: Notification) {
+        hasFocus = true
         handleFocusChange()
+    }
+    
+    @objc private func applicationDeactivated(_ notification: Notification) {
+        hasFocus = false
+        lastFocusedElement = nil
     }
     
     private func handleKeyDown() {
@@ -88,8 +104,13 @@ class InputMethodObserver: NSObject {
     }
     
     private func handleFocusChange() {
-        guard let app = NSWorkspace.shared.frontmostApplication,
-              let focusedElement = getFocusedElement(for: app) else { return }
+        guard hasFocus,
+              let app = NSWorkspace.shared.frontmostApplication,
+              let focusedElement = getFocusedElement(for: app) else {
+            hasFocus = false
+            lastFocusedElement = nil
+            return
+        }
         
         // 检查是否是新的焦点元素
         let isSameElement = lastFocusedElement.map { element -> Bool in
@@ -111,11 +132,13 @@ class InputMethodObserver: NSObject {
         let textRoles = ["AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"]
         let isTextArea = isTextInput.boolValue || (roleStr != nil && textRoles.contains(roleStr!))
         
+        hasFocus = isTextArea
+        
         // 决定是否显示提示
         let now = Date()
         let timeSinceLastShow = now.timeIntervalSince(lastShowTime)
         
-        let shouldShow = isTextArea && (
+        let shouldShow = isTextArea && hasFocus && (
             !isSameElement || // 新的输入框
             (timeSinceLastShow > 2.0 && !isTyping) || // 同一输入框但停顿超过2秒
             (timeSinceLastShow > 10.0) // 无论如何，每10秒至少提示一次
