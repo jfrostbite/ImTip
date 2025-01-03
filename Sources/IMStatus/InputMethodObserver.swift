@@ -152,7 +152,8 @@ class InputMethodObserver: NSObject {
                         // 获取窗口位置
                         var windowRef: CFTypeRef?
                         if AXUIElementCopyAttributeValue(focusedElement, kAXWindowAttribute as CFString, &windowRef) == .success,
-                           let windowElement = windowRef as? AXUIElement {
+                           CFGetTypeID(windowRef!) == AXUIElementGetTypeID() {
+                            let windowElement = windowRef as! AXUIElement
                             
                             var windowPosition: CFTypeRef?
                             if AXUIElementCopyAttributeValue(windowElement, kAXPositionAttribute as CFString, &windowPosition) == .success {
