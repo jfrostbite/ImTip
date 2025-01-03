@@ -150,37 +150,33 @@ class InputMethodObserver: NSObject {
                        AXValueGetValue(bounds as! AXValue, .cgSize, &size) {
                         
                         // 获取窗口位置
-                        var window: AXUIElement?
-                        var windowPosition: CFTypeRef?
-                        
-                        if AXUIElementCopyAttributeValue(focusedElement, kAXWindowAttribute as CFString, &window) == .success,
-                           let windowElement = window,
-                           AXUIElementCopyAttributeValue(windowElement, kAXPositionAttribute as CFString, &windowPosition) == .success {
+                        var windowRef: CFTypeRef?
+                        if AXUIElementCopyAttributeValue(focusedElement, kAXWindowAttribute as CFString, &windowRef) == .success,
+                           let windowElement = (windowRef as! AXUIElement) {
                             
-                            var windowPoint = CGPoint.zero
-                            if AXValueGetValue(windowPosition as! AXValue, .cgPoint, &windowPoint) {
-                                // 计算相对于窗口的位置
-                                let relativePoint = CGPoint(
-                                    x: point.x - windowPoint.x,
-                                    y: point.y - windowPoint.y
-                                )
+                            var windowPosition: CFTypeRef?
+                            if AXUIElementCopyAttributeValue(windowElement, kAXPositionAttribute as CFString, &windowPosition) == .success {
                                 
-                                // 获取行高
-                                var lineHeight: CGFloat = 20 // 默认行高
-                                var lineHeightValue: CFTypeRef?
-                                if AXUIElementCopyAttributeValue(focusedElement, kAXLineHeightAttribute as CFString, &lineHeightValue) == .success,
-                                   let heightNumber = lineHeightValue as? NSNumber {
-                                    lineHeight = CGFloat(heightNumber.doubleValue)
+                                var windowPoint = CGPoint.zero
+                                if AXValueGetValue(windowPosition as! AXValue, .cgPoint, &windowPoint) {
+                                    // 计算相对于窗口的位置
+                                    let relativePoint = CGPoint(
+                                        x: point.x - windowPoint.x,
+                                        y: point.y - windowPoint.y
+                                    )
+                                    
+                                    // 使用固定的行高
+                                    let lineHeight: CGFloat = 20
+                                    
+                                    // 计算最终屏幕坐标
+                                    let screenPoint = NSPoint(
+                                        x: windowPoint.x + relativePoint.x,
+                                        y: windowPoint.y + relativePoint.y + lineHeight
+                                    )
+                                    
+                                    statusWindow?.show(text: text, at: screenPoint)
+                                    return
                                 }
-                                
-                                // 计算最终屏幕坐标
-                                let screenPoint = NSPoint(
-                                    x: windowPoint.x + relativePoint.x,
-                                    y: windowPoint.y + relativePoint.y + lineHeight
-                                )
-                                
-                                statusWindow?.show(text: text, at: screenPoint)
-                                return
                             }
                         }
                     }
